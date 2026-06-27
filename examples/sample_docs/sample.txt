@@ -1,0 +1,18 @@
+DocForge Sample Text
+
+DocForge is a document conversion tool that transforms various file formats into LLM-ready Markdown knowledge bases.
+
+Features include:
+- Text extraction from CHM, HTML, Markdown, and plain text files
+- Noise removal (navigation elements, footers, headers)
+- Metadata enrichment with source information
+- NotebookLM-compatible chunked output
+- RAG-ready JSONL export
+
+Getting Started
+
+Install DocForge and run:
+
+    docforge build input.html -o out
+
+The output directory will contain knowledge_base.md, a notebooklm/ folder, and a docforge_report.md.
