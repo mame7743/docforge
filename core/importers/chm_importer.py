@@ -42,15 +42,8 @@ class ChmImporter(Importer):
         doc_id = _make_id(path)
 
         if sys.platform != "win32":
-            context.warn(
-                f"CHM import requires Windows (hh.exe). Skipped: {path.name}"
-            )
-            return KnowledgeDocument(
-                id=doc_id,
-                title=path.stem,
-                source_path=path,
-                source_type="chm",
-                warnings=[f"CHM not supported on {sys.platform}"],
+            raise ImportError(
+                f"CHM import requires Windows (hh.exe). Platform: {sys.platform}"
             )
 
         with tempfile.TemporaryDirectory(prefix="docforge_chm_") as tmp:
@@ -62,13 +55,7 @@ class ChmImporter(Importer):
                     capture_output=True,
                 )
             except subprocess.CalledProcessError as e:
-                context.warn(f"hh.exe failed for {path.name}: {e}")
-                return KnowledgeDocument(
-                    id=doc_id,
-                    title=path.stem,
-                    source_path=path,
-                    source_type="chm",
-                )
+                raise ImportError(f"hh.exe failed for {path.name}: {e}") from e
 
             return self._build_document(path, extract_dir, doc_id, context)
 

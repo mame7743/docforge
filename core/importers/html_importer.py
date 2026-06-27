@@ -96,6 +96,7 @@ def _empty_doc(path: Path) -> KnowledgeDocument:
         title=path.stem,
         source_path=path,
         source_type="html",
+        metadata={"source_file": str(path.name)},
     )
 
 

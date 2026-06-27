@@ -80,6 +80,13 @@ class KnowledgePipeline:
                 except Exception as e:
                     context.warn(f"Transform error ({transformer.name}) on {path.name}: {e}")
 
+            if not doc.sections:
+                msg = f"No content extracted from {path.name} — skipped"
+                context.warn(msg)
+                self.log(f"  -> WARNING: {msg}")
+                self.progress(int((i + 1) / total * 50))
+                continue
+
             documents.append(doc)
             self.log(f"  -> {len(doc.sections)} sections")
             self.progress(int((i + 1) / total * 50))

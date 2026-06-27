@@ -34,29 +34,13 @@ class MarkItDownImporter(Importer):
 
     def import_file(self, path: Path, context: PipelineContext) -> KnowledgeDocument:
         if not _MARKITDOWN_AVAILABLE:
-            context.warn(
-                f"markitdown not installed; cannot import {path.name}. "
-                "Install with: pip install docforge[markitdown]"
-            )
-            return KnowledgeDocument(
-                id=path.stem,
-                title=path.stem,
-                source_path=path,
-                source_type=path.suffix.lstrip("."),
+            raise ImportError(
+                f"markitdown not installed. Install with: uv sync --extra markitdown"
             )
 
-        try:
-            md = MarkItDown()
-            result = md.convert(str(path))
-            markdown_text: str = result.text_content
-        except Exception as e:
-            context.warn(f"MarkItDown failed for {path.name}: {e}")
-            return KnowledgeDocument(
-                id=path.stem,
-                title=path.stem,
-                source_path=path,
-                source_type=path.suffix.lstrip("."),
-            )
+        md = MarkItDown()
+        result = md.convert(str(path))
+        markdown_text: str = result.text_content
 
         # MarkdownImporter に in-memory Markdown を渡すためのアダプタ
         tmp_path = _TempMarkdownPath(path, markdown_text)

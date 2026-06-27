@@ -15,8 +15,8 @@ def main() -> None:
     window.setWindowTitle("DocForge — Document to Knowledge Base")
     window.resize(800, 700)
 
-    view = MainView()
-    controller = MainController(view)
+    view = MainView(parent=window)
+    controller = MainController(view, parent=window)
     window.setCentralWidget(view)
 
     window.show()
