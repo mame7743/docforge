@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """ナビゲーションリンク・著作権表記などのノイズをセクションから除去する Transformer。
 
 CHM や Web ページには「前へ / 次へ」「Copyright ...」といった本文と無関係な
@@ -8,6 +10,10 @@ import re
 
 from .base import Transformer
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 # 行単位で除去するノイズパターン
 _NOISE_PATTERNS = [
@@ -30,7 +36,7 @@ _NOISE_TITLE_RE = re.compile(
 class CleanNoiseTransformer(Transformer):
     name = "clean_noise"
 
-    def transform(self, document: KnowledgeDocument, context) -> KnowledgeDocument:
+    def transform(self, document: KnowledgeDocument, context: PipelineContext) -> KnowledgeDocument:
         cleaned = []
         for sec in document.sections:
             text = sec.text

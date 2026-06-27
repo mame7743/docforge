@@ -31,13 +31,13 @@ class KnowledgePipeline:
         writers: list[Writer],
         log: Callable[[str], None] | None = None,
         progress: Callable[[int], None] | None = None,
-    ):
+    ) -> None:
         self.registry = registry
         self.transformers = transformers
         self.writers = writers
         # log / progress は GUI では Signal.emit に、CLI では print に差し替えられる
-        self.log = log or (lambda msg: None)
-        self.progress = progress or (lambda value: None)
+        self.log: Callable[[str], None] = log or (lambda msg: None)
+        self.progress: Callable[[int], None] = progress or (lambda value: None)
 
     def run(self, settings: ConvertSettings) -> ConvertResult:
         # 作業ディレクトリは run() のスコープ内でのみ有効。CHM 展開などに使う。
@@ -51,7 +51,7 @@ class KnowledgePipeline:
     def _run_with_context(
         self, settings: ConvertSettings, context: PipelineContext
     ) -> ConvertResult:
-        documents = []
+        documents: list = []
         total = len(settings.input_paths)
 
         # --- Import フェーズ（進捗 0〜50%） ---

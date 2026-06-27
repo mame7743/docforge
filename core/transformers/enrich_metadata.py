@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """ソース情報の補完とキーワード抽出を行う Transformer。
 
 Importer が設定し忘れたメタデータを補完し、
@@ -9,12 +11,16 @@ import re
 
 from .base import Transformer
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class EnrichMetadataTransformer(Transformer):
     name = "enrich_metadata"
 
-    def transform(self, document: KnowledgeDocument, context) -> KnowledgeDocument:
+    def transform(self, document: KnowledgeDocument, context: PipelineContext) -> KnowledgeDocument:
         for sec in document.sections:
             sec.metadata.setdefault("source_type", document.source_type)
             if document.source_path:

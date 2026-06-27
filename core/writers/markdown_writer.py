@@ -1,15 +1,23 @@
+from __future__ import annotations
+
+"""全ドキュメントを1つの knowledge_base.md にまとめる Writer。"""
+
 import datetime
 from pathlib import Path
 
 from .base import Writer
 from core.models.document import KnowledgeDocument
 from core.models.section import KnowledgeSection
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class MarkdownWriter(Writer):
     name = "markdown"
 
-    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context) -> list[Path]:
+    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context: PipelineContext) -> list[Path]:
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "knowledge_base.md"
 

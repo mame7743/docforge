@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """プレーンテキスト (.txt / .log) の Importer。
 
 見出し構造がないため、空行区切りの段落を KnowledgeSection として扱う。
@@ -10,14 +12,18 @@ from pathlib import Path
 from .base import Importer
 from core.models.document import KnowledgeDocument
 from core.models.section import KnowledgeSection
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class TextImporter(Importer):
     name = "text"
     supported_extensions = {".txt", ".log"}
 
-    def import_file(self, path: Path, context) -> KnowledgeDocument:
-        encoding = getattr(context, "encoding_hint", None) or "utf-8"
+    def import_file(self, path: Path, context: PipelineContext) -> KnowledgeDocument:
+        encoding = context.encoding_hint or "utf-8"
         try:
             text = path.read_text(encoding=encoding, errors="replace")
         except Exception as e:

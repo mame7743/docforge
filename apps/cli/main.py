@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Callable
 
 import click
 
@@ -26,7 +27,11 @@ from core.pipeline import KnowledgePipeline
 from core.models.settings import ConvertSettings
 
 
-def _build_pipeline(split_size: int, log=None, progress=None) -> KnowledgePipeline:
+def _build_pipeline(
+    split_size: int,
+    log: Callable[[str], None] | None = None,
+    progress: Callable[[int], None] | None = None,
+) -> KnowledgePipeline:
     registry = ImporterRegistry()
     registry.register(TextImporter())
     registry.register(MarkdownImporter())

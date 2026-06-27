@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """NotebookLM 向け分割 Markdown の Writer。
 
 NotebookLM はソースを複数ファイルに分けてアップロードする形式を推奨している。
@@ -11,6 +13,10 @@ from .base import Writer
 from .markdown_writer import _render_section
 from core.models.document import KnowledgeDocument
 from core.models.section import KnowledgeSection
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 _DEFAULT_SPLIT_SIZE = 100_000
 
@@ -18,10 +24,10 @@ _DEFAULT_SPLIT_SIZE = 100_000
 class NotebookLMWriter(Writer):
     name = "notebooklm"
 
-    def __init__(self, split_size_chars: int = _DEFAULT_SPLIT_SIZE):
+    def __init__(self, split_size_chars: int = _DEFAULT_SPLIT_SIZE) -> None:
         self.split_size = split_size_chars
 
-    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context) -> list[Path]:
+    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context: PipelineContext) -> list[Path]:
         nb_dir = out_dir / "notebooklm"
         nb_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,7 +50,7 @@ def _collect_chunks(
     current: list[str] = []
     current_size = 0
 
-    def flush():
+    def flush() -> None:
         nonlocal current, current_size
         if current:
             chunks.append(current)

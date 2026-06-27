@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """CHM (.chm) の Importer。
 
 Windows の hh.exe -decompile でファイルを展開し、
@@ -16,11 +18,16 @@ from pathlib import Path
 from .base import Importer
 from .html_importer import HtmlImporter
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 try:
     from bs4 import BeautifulSoup
     _BS4_AVAILABLE = True
 except ImportError:
+    BeautifulSoup = None  # type: ignore[assignment,misc]
     _BS4_AVAILABLE = False
 
 
@@ -28,10 +35,10 @@ class ChmImporter(Importer):
     name = "chm"
     supported_extensions = {".chm"}
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._html_importer = HtmlImporter()
 
-    def import_file(self, path: Path, context) -> KnowledgeDocument:
+    def import_file(self, path: Path, context: PipelineContext) -> KnowledgeDocument:
         doc_id = _make_id(path)
 
         if sys.platform != "win32":
@@ -66,7 +73,7 @@ class ChmImporter(Importer):
             return self._build_document(path, extract_dir, doc_id, context)
 
     def _build_document(
-        self, path: Path, extract_dir: Path, doc_id: str, context
+        self, path: Path, extract_dir: Path, doc_id: str, context: PipelineContext
     ) -> KnowledgeDocument:
         doc = KnowledgeDocument(
             id=doc_id,
@@ -110,7 +117,7 @@ def _make_id(path: Path) -> str:
     return re.sub(r"[^a-zA-Z0-9_]", "_", path.stem)[:64]
 
 
-def _parse_hhc(hhc_path: Path, base_dir: Path, context) -> list[Path]:
+def _parse_hhc(hhc_path: Path, base_dir: Path, context: PipelineContext) -> list[Path]:
     """HHC（HTML Help Contents）を解析してページの順序を取得する。
 
     HHC は HTML 形式の XML で、<param name="Local" value="page.htm"> の形で
@@ -131,7 +138,7 @@ def _parse_hhc(hhc_path: Path, base_dir: Path, context) -> list[Path]:
     pages: list[Path] = []
 
     for param in soup.find_all("param", {"name": re.compile(r"local", re.I)}):
-        val = param.get("value", "")
+        val: str = param.get("value", "")
         if val:
             candidate = base_dir / val.replace("\\", "/")
             if candidate.exists():

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Writer の抽象基底クラス。
 
 Writer は KnowledgeDocument のリストを受け取り、
@@ -9,11 +11,15 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class Writer(ABC):
     name: str  # パイプラインでの識別子
 
     @abstractmethod
-    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context) -> list[Path]:
+    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context: PipelineContext) -> list[Path]:
         """ドキュメントを出力し、生成したファイルのパスリストを返す。"""

@@ -63,7 +63,7 @@ class ConvertWorker(QObject):
         self.pipeline = pipeline
 
     @Slot()
-    def run(self):
+    def run(self) -> None:
         try:
             result = self.pipeline.run(self.settings)
             self.finished.emit(result)
@@ -79,7 +79,7 @@ class MainController(QObject):
         self._worker: ConvertWorker | None = None
         self._connect_signals()
 
-    def _connect_signals(self):
+    def _connect_signals(self) -> None:
         ctx = self.view.ctx
         ctx["add_files"].clicked.connect(self._on_add_files)
         ctx["add_folder"].clicked.connect(self._on_add_folder)
@@ -87,7 +87,7 @@ class MainController(QObject):
         ctx["browse_out"].clicked.connect(self._on_browse_out)
         ctx["start"].clicked.connect(self._on_start)
 
-    def _on_add_files(self):
+    def _on_add_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self.view,
             "ファイルを追加",
@@ -97,7 +97,7 @@ class MainController(QObject):
         )
         self.view.add_input_paths([Path(p) for p in paths])
 
-    def _on_add_folder(self):
+    def _on_add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(
             self.view, "フォルダを追加", options=_DIALOG_OPTIONS
         )
@@ -107,17 +107,17 @@ class MainController(QObject):
             files = [p for p in folder_path.rglob("*") if p.suffix.lower() in exts]
             self.view.add_input_paths(sorted(files))
 
-    def _on_remove_file(self):
+    def _on_remove_file(self) -> None:
         self.view.remove_selected_input()
 
-    def _on_browse_out(self):
+    def _on_browse_out(self) -> None:
         folder = QFileDialog.getExistingDirectory(
             self.view, "出力先を選択", options=_DIALOG_OPTIONS
         )
         if folder:
             self.view.set_out_dir(Path(folder))
 
-    def _on_start(self):
+    def _on_start(self) -> None:
         input_paths = self.view.input_paths()
         out_dir = self.view.out_dir()
 
@@ -172,7 +172,7 @@ class MainController(QObject):
             writers=writers,
         )
 
-    def _start_worker(self, pipeline: KnowledgePipeline, settings: ConvertSettings):
+    def _start_worker(self, pipeline: KnowledgePipeline, settings: ConvertSettings) -> None:
         self.view.set_running(True)
         self.view.set_progress(0)
         self.view.append_log("=== 変換開始 ===")
@@ -193,7 +193,7 @@ class MainController(QObject):
         self._thread.start()
 
     @Slot(object)
-    def _on_finished(self, result: ConvertResult):
+    def _on_finished(self, result: ConvertResult) -> None:
         self.view.set_progress(100)
         self.view.append_log("")
         self.view.append_log("=== 変換完了 ===")
@@ -207,6 +207,6 @@ class MainController(QObject):
         self.view.set_running(False)
 
     @Slot(str)
-    def _on_error(self, msg: str):
+    def _on_error(self, msg: str) -> None:
         self.view.append_log(f"エラー: {msg}")
         self.view.set_running(False)

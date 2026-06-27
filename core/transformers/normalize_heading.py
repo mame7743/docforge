@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """見出しレベルを正規化する Transformer。
 
 CHM の内部 HTML は h2 始まりになっているケースが多く、
@@ -7,12 +9,16 @@ CHM の内部 HTML は h2 始まりになっているケースが多く、
 
 from .base import Transformer
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class NormalizeHeadingTransformer(Transformer):
     name = "normalize_heading"
 
-    def transform(self, document: KnowledgeDocument, context) -> KnowledgeDocument:
+    def transform(self, document: KnowledgeDocument, context: PipelineContext) -> KnowledgeDocument:
         if not document.sections:
             return document
 

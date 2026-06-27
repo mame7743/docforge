@@ -7,7 +7,7 @@ from .main_view import MainView
 from .main_controller import MainController
 
 
-def main():
+def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("DocForge")
 

@@ -1,22 +1,30 @@
+from __future__ import annotations
+
+"""RAG 向け JSONL の Writer。セクション1つが1レコードになる。"""
+
 import json
 import re
 from pathlib import Path
 
 from .base import Writer
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class JsonlWriter(Writer):
     name = "jsonl"
 
-    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context) -> list[Path]:
+    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context: PipelineContext) -> list[Path]:
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "chunks.jsonl"
 
         records: list[dict] = []
         for doc in documents:
             for i, sec in enumerate(doc.sections):
-                record = {
+                record: dict = {
                     "id": _safe_id(f"{doc.id}_{sec.id}_{i:04d}"),
                     "doc_id": doc.id,
                     "source_type": doc.source_type,

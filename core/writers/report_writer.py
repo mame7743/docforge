@@ -1,14 +1,22 @@
+from __future__ import annotations
+
+"""変換レポート (docforge_report.md) を出力する Writer。"""
+
 import datetime
 from pathlib import Path
 
 from .base import Writer
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class ReportWriter(Writer):
     name = "report"
 
-    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context) -> list[Path]:
+    def write(self, documents: list[KnowledgeDocument], out_dir: Path, context: PipelineContext) -> list[Path]:
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "docforge_report.md"
 

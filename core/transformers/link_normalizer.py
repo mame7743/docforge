@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """内部リンクをメタデータに移動する Transformer。
 
 RAG や LLM 向けの出力では、相対パスの内部リンク（例: "../page.htm"）は
@@ -7,12 +9,16 @@ section.links には外部 URL のみ残す。
 
 from .base import Transformer
 from core.models.document import KnowledgeDocument
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 
 class LinkNormalizerTransformer(Transformer):
     name = "link_normalizer"
 
-    def transform(self, document: KnowledgeDocument, context) -> KnowledgeDocument:
+    def transform(self, document: KnowledgeDocument, context: PipelineContext) -> KnowledgeDocument:
         for sec in document.sections:
             internal = [lnk for lnk in sec.links if _is_internal(lnk)]
             external = [lnk for lnk in sec.links if not _is_internal(lnk)]

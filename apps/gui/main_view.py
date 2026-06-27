@@ -28,7 +28,7 @@ class MainView(QWidget):
         self.ctx = UIContext()
         self._build_ui()
 
-    def _build_ui(self):
+    def _build_ui(self) -> None:
         from PySide6.QtWidgets import QVBoxLayout
 
         layout_node = vbox(
@@ -125,7 +125,7 @@ class MainView(QWidget):
     def append_log(self, text: str) -> None:
         self.ctx["log"].append(text)
 
-    def set_running(self, running: bool) -> None:
+    def set_running(self, running: bool) -> None:  # noqa: FBT001
         self.ctx["start"].setEnabled(not running)
         self.ctx["add_files"].setEnabled(not running)
         self.ctx["add_folder"].setEnabled(not running)

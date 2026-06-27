@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """HTML (.html / .htm) の Importer。
 
 BeautifulSoup でノイズ要素を除去してから見出しごとにセクションを作る。
@@ -6,15 +8,22 @@ CHM の内部 HTML ページも同じクラスで処理する。
 
 import re
 from pathlib import Path
+from typing import Union
 
 from .base import Importer
 from core.models.document import KnowledgeDocument
 from core.models.section import KnowledgeSection
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.pipeline.context import PipelineContext
 
 try:
-    from bs4 import BeautifulSoup
+    from bs4 import BeautifulSoup, Tag
     _BS4_AVAILABLE = True
 except ImportError:
+    BeautifulSoup = None  # type: ignore[assignment,misc]
+    Tag = None            # type: ignore[assignment,misc]
     _BS4_AVAILABLE = False
 
 # 変換前に DOM から取り除くナビゲーション・装飾要素
@@ -30,12 +39,12 @@ class HtmlImporter(Importer):
     name = "html"
     supported_extensions = {".html", ".htm"}
 
-    def import_file(self, path: Path, context) -> KnowledgeDocument:
+    def import_file(self, path: Path, context: PipelineContext) -> KnowledgeDocument:
         if not _BS4_AVAILABLE:
             context.warn("beautifulsoup4 not installed; HTML import unavailable")
             return _empty_doc(path)
 
-        encoding = getattr(context, "encoding_hint", None) or "utf-8"
+        encoding = context.encoding_hint or "utf-8"
         try:
             # バイト列で読んでから decode することで BOM 付きファイルに対応する
             raw = path.read_bytes()
@@ -94,14 +103,14 @@ def _make_id(path: Path) -> str:
     return re.sub(r"[^a-zA-Z0-9_]", "_", path.stem)[:64]
 
 
-def _remove_noise(soup) -> None:
+def _remove_noise(soup: "BeautifulSoup") -> None:
     """ナビゲーション・フッターなどのノイズ要素を DOM から除去する。"""
     for selector in _NOISE_SELECTORS:
         for el in soup.select(selector):
             el.decompose()
 
 
-def _extract_title(soup) -> str | None:
+def _extract_title(soup: "BeautifulSoup") -> str | None:
     tag = soup.find("title")
     if tag:
         return tag.get_text(strip=True)
@@ -111,7 +120,12 @@ def _extract_title(soup) -> str | None:
     return None
 
 
-def _parse_sections(body, doc_id: str, path: Path, doc_title: str) -> list[KnowledgeSection]:
+def _parse_sections(
+    body: "Union[BeautifulSoup, Tag]",
+    doc_id: str,
+    path: Path,
+    doc_title: str,
+) -> list[KnowledgeSection]:
     """見出しタグを起点にセクションを作成する。
 
     各見出しの直後から次の見出しまでの要素を本文として収集する。

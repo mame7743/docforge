@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from PySide6.QtWidgets import (
     QCheckBox,
     QGroupBox,
@@ -39,57 +41,57 @@ from .node import Node
 # Node コンストラクタ — 宣言的な記述用のヘルパー関数
 # ---------------------------------------------------------------------------
 
-def vbox(*children, **props) -> Node:
+def vbox(*children: Node, **props: Any) -> Node:
     return Node("vbox", props, list(children))
 
 
-def hbox(*children, **props) -> Node:
+def hbox(*children: Node, **props: Any) -> Node:
     return Node("hbox", props, list(children))
 
 
-def group(title: str, *children, **props) -> Node:
+def group(title: str, *children: Node, **props: Any) -> Node:
     """QGroupBox を作る。タイトルは枠線に表示される。"""
     return Node("group", {"title": title, **props}, list(children))
 
 
-def spacer(**props) -> Node:
+def spacer(**props: Any) -> Node:
     """水平方向に伸縮するスペーサー（hbox 内のボタン右寄せなどに使う）。"""
     return Node("spacer", props)
 
 
-def label(text: str, **props) -> Node:
+def label(text: str, **props: Any) -> Node:
     return Node("label", {"text": text, **props})
 
 
-def button(text: str, **props) -> Node:
+def button(text: str, **props: Any) -> Node:
     """classes=["primary"] を指定するとデフォルトボタンになる。"""
     return Node("button", {"text": text, **props})
 
 
-def line_edit(**props) -> Node:
+def line_edit(**props: Any) -> Node:
     return Node("line_edit", props)
 
 
-def checkbox(text: str, **props) -> Node:
+def checkbox(text: str, **props: Any) -> Node:
     """checked=True で初期チェック状態にする。"""
     return Node("checkbox", {"text": text, **props})
 
 
-def text_edit(**props) -> Node:
+def text_edit(**props: Any) -> Node:
     """readonly=True でログ表示などの読み取り専用テキスト欄にする。"""
     return Node("text_edit", props)
 
 
-def progress_bar(**props) -> Node:
+def progress_bar(**props: Any) -> Node:
     return Node("progress_bar", props)
 
 
-def spin_box(**props) -> Node:
+def spin_box(**props: Any) -> Node:
     """value / minimum / maximum / step を props で指定できる。"""
     return Node("spin_box", props)
 
 
-def file_list(**props) -> Node:
+def file_list(**props: Any) -> Node:
     """入力ファイルの一覧表示に使う QListWidget。"""
     return Node("file_list", props)
 
@@ -107,6 +109,8 @@ def _realize(ctx: UIContext, node: Node) -> QWidget:
     kind = node.kind
     props = node.props
 
+    widget: QWidget
+
     if kind == "vbox":
         widget = _layout_widget(ctx, node, QVBoxLayout)
     elif kind == "hbox":
@@ -118,45 +122,51 @@ def _realize(ctx: UIContext, node: Node) -> QWidget:
     elif kind == "label":
         widget = QLabel(props.get("text", ""))
     elif kind == "button":
-        widget = QPushButton(props.get("text", ""))
+        w = QPushButton(props.get("text", ""))
         if "classes" in props and "primary" in props["classes"]:
-            widget.setDefault(True)
+            w.setDefault(True)
+        widget = w
     elif kind == "line_edit":
-        widget = QLineEdit()
+        w = QLineEdit()
         if "placeholder" in props:
-            widget.setPlaceholderText(props["placeholder"])
+            w.setPlaceholderText(props["placeholder"])
+        widget = w
     elif kind == "checkbox":
-        widget = QCheckBox(props.get("text", ""))
-        widget.setChecked(bool(props.get("checked", False)))
+        w = QCheckBox(props.get("text", ""))
+        w.setChecked(bool(props.get("checked", False)))
+        widget = w
     elif kind == "text_edit":
-        widget = QTextEdit()
+        w = QTextEdit()
         if props.get("readonly"):
-            widget.setReadOnly(True)
+            w.setReadOnly(True)
+        widget = w
     elif kind == "progress_bar":
-        widget = QProgressBar()
-        widget.setValue(0)
-        widget.setRange(0, 100)
+        w = QProgressBar()
+        w.setValue(0)
+        w.setRange(0, 100)
+        widget = w
     elif kind == "spin_box":
-        widget = QSpinBox()
-        widget.setMinimum(props.get("minimum", 0))
-        widget.setMaximum(props.get("maximum", 999_999_999))
-        widget.setValue(props.get("value", 0))
+        w = QSpinBox()
+        w.setMinimum(props.get("minimum", 0))
+        w.setMaximum(props.get("maximum", 999_999_999))
+        w.setValue(props.get("value", 0))
         if "step" in props:
-            widget.setSingleStep(props["step"])
+            w.setSingleStep(props["step"])
+        widget = w
     elif kind == "file_list":
         widget = QListWidget()
     else:
         widget = QWidget()
 
     # id が指定されていれば UIContext に登録する
-    widget_id = props.get("id")
+    widget_id: str | None = props.get("id")
     if widget_id:
         ctx.register(widget_id, widget)
 
     return widget
 
 
-def _layout_widget(ctx: UIContext, node: Node, layout_cls) -> QWidget:
+def _layout_widget(ctx: UIContext, node: Node, layout_cls: type) -> QWidget:
     """vbox / hbox 共通の実装。stretch プロパティで引き伸ばし比率を指定する。"""
     container = QWidget()
     layout = layout_cls(container)
@@ -164,7 +174,7 @@ def _layout_widget(ctx: UIContext, node: Node, layout_cls) -> QWidget:
 
     for child in node.children:
         child_widget = _realize(ctx, child)
-        stretch = child.props.get("stretch", 0)
+        stretch: int = child.props.get("stretch", 0)
         layout.addWidget(child_widget, stretch)
 
     return container
@@ -176,7 +186,7 @@ def _group(ctx: UIContext, node: Node) -> QGroupBox:
 
     for child in node.children:
         child_widget = _realize(ctx, child)
-        stretch = child.props.get("stretch", 0)
+        stretch: int = child.props.get("stretch", 0)
         layout.addWidget(child_widget, stretch)
 
     return box
