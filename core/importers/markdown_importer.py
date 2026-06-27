@@ -1,3 +1,10 @@
+"""Markdown (.md / .markdown) の Importer。
+
+見出し (# 〜 ######) ごとに KnowledgeSection を作成する。
+見出しがない場合はファイル全体を1つのセクションとして扱う。
+MarkItDownImporter も内部でこのロジックを再利用する。
+"""
+
 import re
 from pathlib import Path
 
@@ -29,6 +36,7 @@ class MarkdownImporter(Importer):
 
         sections = _parse_sections(text, doc_id, path)
         if not sections:
+            # 見出しなし: ファイル全体を1セクションにまとめる
             sec = KnowledgeSection(
                 id=f"{doc_id}_body",
                 title=path.stem,
@@ -51,11 +59,13 @@ def _make_id(path: Path) -> str:
 
 
 def _extract_title(text: str) -> str | None:
+    """ファイル先頭の H1 見出しをドキュメントタイトルとして取得する。"""
     m = re.match(r"^#\s+(.+)$", text, re.MULTILINE)
     return m.group(1).strip() if m else None
 
 
 def _parse_sections(text: str, doc_id: str, path: Path) -> list[KnowledgeSection]:
+    """見出し行でテキストを分割し、各見出し直後の本文をセクションに収める。"""
     heading_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
     matches = list(heading_re.finditer(text))
 
@@ -63,7 +73,7 @@ def _parse_sections(text: str, doc_id: str, path: Path) -> list[KnowledgeSection
         return []
 
     sections: list[KnowledgeSection] = []
-    heading_stack: list[str] = []
+    heading_stack: list[str] = []  # 目次上の階層を追跡する
 
     for i, m in enumerate(matches):
         level = len(m.group(1))
@@ -72,6 +82,7 @@ def _parse_sections(text: str, doc_id: str, path: Path) -> list[KnowledgeSection
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[start:end].strip()
 
+        # レベルに合わせてスタックを巻き戻す
         while len(heading_stack) >= level:
             heading_stack.pop()
         heading_stack.append(title)
@@ -97,8 +108,10 @@ def _parse_sections(text: str, doc_id: str, path: Path) -> list[KnowledgeSection
 
 
 def _extract_links(text: str) -> list[str]:
-    return re.findall(r"\[.*?\]\((.+?)\)", text)
+    """[text](url) 形式のリンクを抽出する（画像を除く）。"""
+    return re.findall(r"(?<!!)\[.*?\]\((.+?)\)", text)
 
 
 def _extract_image_refs(text: str) -> list[str]:
+    """![alt](src) 形式の画像参照を抽出する。"""
     return re.findall(r"!\[.*?\]\((.+?)\)", text)

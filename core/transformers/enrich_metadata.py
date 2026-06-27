@@ -1,3 +1,10 @@
+"""ソース情報の補完とキーワード抽出を行う Transformer。
+
+Importer が設定し忘れたメタデータを補完し、
+本文の頻出語をキーワードとして付与する。
+キーワードは RAG 検索やレポート表示に使われる。
+"""
+
 import re
 
 from .base import Transformer
@@ -5,8 +12,6 @@ from core.models.document import KnowledgeDocument
 
 
 class EnrichMetadataTransformer(Transformer):
-    """Enriches section metadata with source info and derived keywords."""
-
     name = "enrich_metadata"
 
     def transform(self, document: KnowledgeDocument, context) -> KnowledgeDocument:
@@ -20,6 +25,9 @@ class EnrichMetadataTransformer(Transformer):
 
 
 def _extract_keywords(text: str, top_n: int = 10) -> list[str]:
+    """出現頻度の高い単語を上位 top_n 件返す。
+    日本語・英語の3文字以上の語を対象にする。
+    """
     words = re.findall(r"[一-龯ぁ-んァ-ンa-zA-Z]{3,}", text)
     freq: dict[str, int] = {}
     for w in words:

@@ -1,10 +1,15 @@
+"""見出しレベルを正規化する Transformer。
+
+CHM の内部 HTML は h2 始まりになっているケースが多く、
+そのまま出力すると Markdown の構造が崩れる。
+最小レベルが 1 になるようにシフトする。
+"""
+
 from .base import Transformer
 from core.models.document import KnowledgeDocument
 
 
 class NormalizeHeadingTransformer(Transformer):
-    """Ensures heading levels start at 1 and have no gaps."""
-
     name = "normalize_heading"
 
     def transform(self, document: KnowledgeDocument, context) -> KnowledgeDocument:

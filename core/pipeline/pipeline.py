@@ -1,3 +1,16 @@
+"""DocForge の変換パイプライン本体。
+
+処理の流れ:
+    入力ファイル
+      → Importer（形式ごとの読み込み）
+      → KnowledgeDocument（中間モデル）
+      → Transformer チェーン（ノイズ除去・正規化・メタ情報付与）
+      → Writer チェーン（Markdown / JSONL / レポート 出力）
+      → ConvertResult
+
+1ファイルの失敗は警告として記録し、残りの処理を続行する。
+"""
+
 import tempfile
 from pathlib import Path
 from typing import Callable
@@ -22,10 +35,12 @@ class KnowledgePipeline:
         self.registry = registry
         self.transformers = transformers
         self.writers = writers
+        # log / progress は GUI では Signal.emit に、CLI では print に差し替えられる
         self.log = log or (lambda msg: None)
         self.progress = progress or (lambda value: None)
 
     def run(self, settings: ConvertSettings) -> ConvertResult:
+        # 作業ディレクトリは run() のスコープ内でのみ有効。CHM 展開などに使う。
         with tempfile.TemporaryDirectory(prefix="docforge_work_") as work_dir:
             context = PipelineContext(
                 work_dir=Path(work_dir),
@@ -39,6 +54,7 @@ class KnowledgePipeline:
         documents = []
         total = len(settings.input_paths)
 
+        # --- Import フェーズ（進捗 0〜50%） ---
         for i, path in enumerate(settings.input_paths):
             try:
                 importer = self.registry.find(path)
@@ -57,6 +73,7 @@ class KnowledgePipeline:
                 self.progress(int((i + 1) / total * 50))
                 continue
 
+            # Transformer は直列に適用する（順序依存あり）
             for transformer in self.transformers:
                 try:
                     doc = transformer.transform(doc, context)
@@ -70,6 +87,7 @@ class KnowledgePipeline:
         settings.out_dir.mkdir(parents=True, exist_ok=True)
         output_files: list[Path] = []
 
+        # --- Write フェーズ（進捗 50〜100%） ---
         active_writers = self._select_writers(settings)
         for j, writer in enumerate(active_writers):
             self.log(f"Write: {writer.name}")
@@ -89,6 +107,7 @@ class KnowledgePipeline:
             warnings=list(context.warnings),
         )
 
+        # 主要出力ファイルへのショートカットを設定する
         for f in output_files:
             if f.name == "knowledge_base.md":
                 result.markdown_file = f
@@ -102,6 +121,7 @@ class KnowledgePipeline:
         return result
 
     def _select_writers(self, settings: ConvertSettings) -> list[Writer]:
+        """settings のフラグに基づいて有効な Writer だけを返す。"""
         selected: list[Writer] = []
         names = {w.name: w for w in self.writers}
 

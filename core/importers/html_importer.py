@@ -1,3 +1,9 @@
+"""HTML (.html / .htm) の Importer。
+
+BeautifulSoup でノイズ要素を除去してから見出しごとにセクションを作る。
+CHM の内部 HTML ページも同じクラスで処理する。
+"""
+
 import re
 from pathlib import Path
 
@@ -6,11 +12,12 @@ from core.models.document import KnowledgeDocument
 from core.models.section import KnowledgeSection
 
 try:
-    from bs4 import BeautifulSoup, Tag
+    from bs4 import BeautifulSoup
     _BS4_AVAILABLE = True
 except ImportError:
     _BS4_AVAILABLE = False
 
+# 変換前に DOM から取り除くナビゲーション・装飾要素
 _NOISE_SELECTORS = [
     "nav", "header", "footer", ".nav", ".navigation", ".sidebar",
     ".breadcrumb", ".toc", "#toc", ".noprint", "script", "style",
@@ -30,6 +37,7 @@ class HtmlImporter(Importer):
 
         encoding = getattr(context, "encoding_hint", None) or "utf-8"
         try:
+            # バイト列で読んでから decode することで BOM 付きファイルに対応する
             raw = path.read_bytes()
             html = raw.decode(encoding, errors="replace")
         except Exception as e:
@@ -54,6 +62,7 @@ class HtmlImporter(Importer):
         sections = _parse_sections(body, doc_id, path, title)
 
         if not sections:
+            # 見出しなし: body 全体を1セクションにまとめる
             text = body.get_text(separator="\n", strip=True)
             sec = KnowledgeSection(
                 id=f"{doc_id}_body",
@@ -86,6 +95,7 @@ def _make_id(path: Path) -> str:
 
 
 def _remove_noise(soup) -> None:
+    """ナビゲーション・フッターなどのノイズ要素を DOM から除去する。"""
     for selector in _NOISE_SELECTORS:
         for el in soup.select(selector):
             el.decompose()
@@ -102,6 +112,12 @@ def _extract_title(soup) -> str | None:
 
 
 def _parse_sections(body, doc_id: str, path: Path, doc_title: str) -> list[KnowledgeSection]:
+    """見出しタグを起点にセクションを作成する。
+
+    各見出しの直後から次の見出しまでの要素を本文として収集する。
+    NavigableString（タグなしテキストノード）は find_all を持たないため
+    isinstance で分岐してテキストだけ取り出す。
+    """
     headings = body.find_all(_HEADING_TAGS)
     if not headings:
         return []
@@ -113,7 +129,6 @@ def _parse_sections(body, doc_id: str, path: Path, doc_title: str) -> list[Knowl
         level = int(h.name[1])
         title = h.get_text(strip=True)
 
-        # collect sibling content until next heading
         body_parts: list[str] = []
         links: list[str] = []
         assets: list[str] = []
@@ -122,7 +137,7 @@ def _parse_sections(body, doc_id: str, path: Path, doc_title: str) -> list[Knowl
             if hasattr(sib, "name") and sib.name in _HEADING_TAGS:
                 break
             if not hasattr(sib, "name") or sib.name is None:
-                # NavigableString (plain text node)
+                # NavigableString: タグなしテキストノード。find_all を持たないので直接 str() で取得する。
                 text = str(sib).strip()
                 if text:
                     body_parts.append(text)

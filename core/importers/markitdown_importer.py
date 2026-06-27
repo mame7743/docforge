@@ -1,6 +1,9 @@
-"""
-MarkItDown Importer - uses markitdown library as backend.
-Converts Office/PDF to Markdown, then delegates to MarkdownImporter.
+"""MarkItDown ライブラリを使った Office / PDF Importer。
+
+markitdown が変換した Markdown テキストを MarkdownImporter と同じロジックで
+KnowledgeDocument に変換する。MarkItDown はコアではなくバックエンドの1つとして扱う。
+
+インストール: pip install docforge[markitdown]
 """
 
 from pathlib import Path
@@ -49,6 +52,7 @@ class MarkItDownImporter(Importer):
                 source_type=path.suffix.lstrip("."),
             )
 
+        # MarkdownImporter に in-memory Markdown を渡すためのアダプタ
         tmp_path = _TempMarkdownPath(path, markdown_text)
         doc = self._md_importer.import_file(tmp_path, context)
         doc.source_type = path.suffix.lstrip(".")
@@ -57,7 +61,7 @@ class MarkItDownImporter(Importer):
 
 
 class _TempMarkdownPath:
-    """Thin wrapper so MarkdownImporter can read in-memory Markdown."""
+    """MarkdownImporter が Path として扱えるよう、インメモリ文字列をラップするアダプタ。"""
 
     def __init__(self, original: Path, content: str):
         self.stem = original.stem

@@ -1,3 +1,14 @@
+"""メインウィンドウの Controller。
+
+ボタンイベントを受け取り、入力を検証してから ConvertWorker を起動する。
+変換結果・ログ・進捗は Worker のシグナル経由で View に届く。
+
+スレッド安全性:
+    KnowledgePipeline の log / progress コールバックは Worker スレッドから呼ばれる。
+    直接 Qt ウィジェットを操作すると未定義動作になるため、
+    Worker が Signal.emit() し、Qt のキュー接続でメインスレッドへ届ける設計にしている。
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,6 +16,8 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
+# macOS + PySide6 でネイティブダイアログ (NSOpenPanel) を使うと
+# Qt のバックバッファと衝突して segfault が起きるバグを回避する
 _DIALOG_OPTIONS = QFileDialog.Option.DontUseNativeDialog
 
 from .main_view import MainView
@@ -33,16 +46,18 @@ from core.models.result import ConvertResult
 
 
 class ConvertWorker(QObject):
+    """KnowledgePipeline を別スレッドで実行し、結果をシグナルで通知する。"""
+
     log_message = Signal(str)
     progress_changed = Signal(int)
-    finished = Signal(object)  # ConvertResult
+    finished = Signal(object)   # ConvertResult
     error = Signal(str)
 
     def __init__(self, pipeline: KnowledgePipeline, settings: ConvertSettings):
         super().__init__()
         self.settings = settings
-        # Wire pipeline callbacks to signals so GUI updates go through Qt's
-        # queued connection and are dispatched safely to the main thread.
+        # pipeline の log / progress を Signal.emit にワイヤリングする。
+        # emit はスレッドセーフで、Qt がキュー接続経由でメインスレッドへ届ける。
         pipeline.log = lambda msg: self.log_message.emit(msg)
         pipeline.progress = lambda v: self.progress_changed.emit(v)
         self.pipeline = pipeline
@@ -195,4 +210,3 @@ class MainController(QObject):
     def _on_error(self, msg: str):
         self.view.append_log(f"エラー: {msg}")
         self.view.set_running(False)
-

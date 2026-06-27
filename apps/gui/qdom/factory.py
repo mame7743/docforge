@@ -1,20 +1,20 @@
-"""
-qdom factory — build PySide6 widget trees declaratively.
+"""qdom ファクトリ — Node ツリーを PySide6 ウィジェットに変換する。
 
-Each helper returns a (QWidget, UIContext) or contributes into the caller's
-context. The top-level build() call is the entry point.
-
-Usage:
+使い方:
     ctx = UIContext()
-    root_widget = build(ctx, vbox(...))
+    root = build(ctx, vbox(
+        button("クリック", id="btn"),
+        progress_bar(id="progress"),
+    ))
+    ctx["btn"].clicked.connect(handler)
     ctx["progress"].setValue(50)
+
+仮想 DOM・差分更新・双方向バインディングは持たない。
+あくまでウィジェットツリーを宣言的に書くための薄いラッパー。
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QGroupBox,
@@ -36,7 +36,7 @@ from .node import Node
 
 
 # ---------------------------------------------------------------------------
-# Node constructors
+# Node コンストラクタ — 宣言的な記述用のヘルパー関数
 # ---------------------------------------------------------------------------
 
 def vbox(*children, **props) -> Node:
@@ -48,10 +48,12 @@ def hbox(*children, **props) -> Node:
 
 
 def group(title: str, *children, **props) -> Node:
+    """QGroupBox を作る。タイトルは枠線に表示される。"""
     return Node("group", {"title": title, **props}, list(children))
 
 
 def spacer(**props) -> Node:
+    """水平方向に伸縮するスペーサー（hbox 内のボタン右寄せなどに使う）。"""
     return Node("spacer", props)
 
 
@@ -60,6 +62,7 @@ def label(text: str, **props) -> Node:
 
 
 def button(text: str, **props) -> Node:
+    """classes=["primary"] を指定するとデフォルトボタンになる。"""
     return Node("button", {"text": text, **props})
 
 
@@ -68,10 +71,12 @@ def line_edit(**props) -> Node:
 
 
 def checkbox(text: str, **props) -> Node:
+    """checked=True で初期チェック状態にする。"""
     return Node("checkbox", {"text": text, **props})
 
 
 def text_edit(**props) -> Node:
+    """readonly=True でログ表示などの読み取り専用テキスト欄にする。"""
     return Node("text_edit", props)
 
 
@@ -80,21 +85,22 @@ def progress_bar(**props) -> Node:
 
 
 def spin_box(**props) -> Node:
+    """value / minimum / maximum / step を props で指定できる。"""
     return Node("spin_box", props)
 
 
 def file_list(**props) -> Node:
+    """入力ファイルの一覧表示に使う QListWidget。"""
     return Node("file_list", props)
 
 
 # ---------------------------------------------------------------------------
-# Realizer — turns Node tree into PySide6 widgets
+# Realizer — Node ツリーを実際の PySide6 ウィジェットに変換する
 # ---------------------------------------------------------------------------
 
 def build(ctx: UIContext, node: Node) -> QWidget:
-    """Realize a Node tree into PySide6 widgets, registering ids in ctx."""
-    widget = _realize(ctx, node)
-    return widget
+    """Node ツリーを PySide6 ウィジェットとして構築し、id を ctx に登録する。"""
+    return _realize(ctx, node)
 
 
 def _realize(ctx: UIContext, node: Node) -> QWidget:
@@ -142,6 +148,7 @@ def _realize(ctx: UIContext, node: Node) -> QWidget:
     else:
         widget = QWidget()
 
+    # id が指定されていれば UIContext に登録する
     widget_id = props.get("id")
     if widget_id:
         ctx.register(widget_id, widget)
@@ -150,6 +157,7 @@ def _realize(ctx: UIContext, node: Node) -> QWidget:
 
 
 def _layout_widget(ctx: UIContext, node: Node, layout_cls) -> QWidget:
+    """vbox / hbox 共通の実装。stretch プロパティで引き伸ばし比率を指定する。"""
     container = QWidget()
     layout = layout_cls(container)
     layout.setContentsMargins(0, 0, 0, 0)
@@ -175,6 +183,7 @@ def _group(ctx: UIContext, node: Node) -> QGroupBox:
 
 
 def _spacer_widget() -> QWidget:
+    """Expanding ポリシーにより hbox 内で残りスペースを埋める。"""
     spacer = QWidget()
     spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
     return spacer

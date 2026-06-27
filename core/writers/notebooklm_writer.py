@@ -1,6 +1,8 @@
-"""
-NotebookLM Writer - splits documents into multiple Markdown files,
-maintaining page boundaries and staying under split_size_chars.
+"""NotebookLM 向け分割 Markdown の Writer。
+
+NotebookLM はソースを複数ファイルに分けてアップロードする形式を推奨している。
+ページ（セクション）境界を維持しながら split_size_chars を超えないよう
+新しいファイルへ移動させる。1セクションが巨大な場合は段落単位でさらに分割する。
 """
 
 from pathlib import Path
@@ -37,6 +39,7 @@ class NotebookLMWriter(Writer):
 def _collect_chunks(
     documents: list[KnowledgeDocument], split_size: int
 ) -> list[list[str]]:
+    """ドキュメントリストをセクション単位で分割し、各チャンクの行リストを返す。"""
     chunks: list[list[str]] = []
     current: list[str] = []
     current_size = 0
@@ -62,15 +65,17 @@ def _collect_chunks(
             sec_text = "\n".join(sec_lines)
             sec_size = len(sec_text)
 
+            # 現在のチャンクに追加するとサイズを超える場合はここで区切る
             if current_size + sec_size > split_size and current:
                 flush()
 
             if not current:
+                # 新しいチャンクの先頭にドキュメントヘッダを付ける
                 current.extend(doc_header)
                 current_size += sum(len(l) + 1 for l in doc_header)
 
             if sec_size > split_size:
-                # single oversized section: split by paragraphs
+                # 1セクションだけで上限を超える場合: 段落単位でさらに分割する
                 for part_lines in _split_large_section(sec, split_size):
                     if current:
                         flush()
@@ -86,6 +91,7 @@ def _collect_chunks(
 
 
 def _split_large_section(sec: KnowledgeSection, split_size: int) -> list[list[str]]:
+    """1セクションが split_size を超える場合に段落単位で分割する。"""
     paragraphs = sec.text.split("\n\n")
     parts: list[list[str]] = []
     current_paras: list[str] = []

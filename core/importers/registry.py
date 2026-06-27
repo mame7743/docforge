@@ -1,7 +1,12 @@
+"""Importer の登録・検索を管理するレジストリ。
+
+登録順に can_import() を試し、最初にマッチした Importer を返す。
+優先度を変えたい場合は register() の呼び出し順で制御する。
+"""
+
 from pathlib import Path
 
 from .base import Importer
-from core.models.document import KnowledgeDocument
 
 
 class ImporterRegistry:
@@ -12,6 +17,7 @@ class ImporterRegistry:
         self.importers.append(importer)
 
     def find(self, path: Path) -> Importer:
+        """対応する Importer を返す。見つからない場合は ValueError を送出する。"""
         for importer in self.importers:
             if importer.can_import(path):
                 return importer

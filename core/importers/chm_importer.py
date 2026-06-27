@@ -1,19 +1,21 @@
-"""
-CHM Importer - Windows: uses hh.exe -decompile to extract CHM contents.
-Non-Windows: emits a warning and returns an empty document.
+"""CHM (.chm) の Importer。
+
+Windows の hh.exe -decompile でファイルを展開し、
+.hhc（目次ファイル）を読んで HTML ページを目次順に処理する。
+
+非 Windows では警告を出して空ドキュメントを返す。
+将来は 7z / libmspack などの代替バックエンドに差し替えられる設計。
 """
 
 import re
 import subprocess
 import sys
 import tempfile
-import uuid
 from pathlib import Path
 
 from .base import Importer
 from .html_importer import HtmlImporter
 from core.models.document import KnowledgeDocument
-from core.models.section import KnowledgeSection
 
 try:
     from bs4 import BeautifulSoup
@@ -82,6 +84,7 @@ class ChmImporter(Importer):
         else:
             context.warn(f".hhc not found in {path.name}: fallback to filename order")
 
+        # .hhc にないページは末尾に追加する
         all_html = sorted(extract_dir.rglob("*.htm")) + sorted(extract_dir.rglob("*.html"))
         ordered_set = set(ordered_pages)
         remaining = [p for p in all_html if p not in ordered_set]
@@ -91,6 +94,7 @@ class ChmImporter(Importer):
         for html_path in pages:
             page_doc = self._html_importer.import_file(html_path, context)
             for sec in page_doc.sections:
+                # CHM 内の各ページのセクション ID が衝突しないよう doc_id を prefix として付ける
                 sec.id = f"{doc_id}_{sec.id}"
                 sec.order = order
                 sec.metadata["source_file"] = f"{path.name}/{html_path.name}"
@@ -107,7 +111,11 @@ def _make_id(path: Path) -> str:
 
 
 def _parse_hhc(hhc_path: Path, base_dir: Path, context) -> list[Path]:
-    """Parse HHC (HTML Help Contents) to get ordered list of HTML pages."""
+    """HHC（HTML Help Contents）を解析してページの順序を取得する。
+
+    HHC は HTML 形式の XML で、<param name="Local" value="page.htm"> の形で
+    ページファイルへのパスが記録されている。
+    """
     if not _BS4_AVAILABLE:
         context.warn(".hhc parsing requires beautifulsoup4")
         return []
