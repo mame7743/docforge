@@ -2,11 +2,12 @@ from __future__ import annotations
 
 """NotebookLM 向け分割 Markdown の Writer。
 
-split_settings.enabled=False（デフォルト）: 全コンテンツを1ファイルに統合する。
-split_settings.enabled=True: metric と threshold に基づいてファイルを分割する。
-1セクションが巨大な場合は段落単位でさらに分割する。
+split_settings.enabled=False（デフォルト）: 後退互換の per-doc 100K 分割ロジックを使用。
+split_settings.enabled=True: metric と threshold に基づいてファイルを分割し、
+  max_sources と overflow 戦略によりファイル数・文字数の両制約を制御する。
 """
 
+import math
 from pathlib import Path
 
 from .base import Writer
@@ -38,8 +39,16 @@ class NotebookLMWriter(Writer):
         nb_dir.mkdir(parents=True, exist_ok=True)
 
         chunks = _collect_chunks_for_output(documents, self.split_size, self.split_settings)
-        output_files: list[Path] = []
 
+        if self.split_settings and self.split_settings.enabled:
+            chunks = _apply_overflow_strategy(chunks, documents, self.split_settings, context)
+        elif len(chunks) > 50:
+            context.warn(
+                f"NotebookLM のソース数上限（50）を超えています: {len(chunks)} ファイル。"
+                "「分割する」を有効にして max_sources と overflow を設定することを推奨します。"
+            )
+
+        output_files: list[Path] = []
         for i, chunk_lines in enumerate(chunks, start=1):
             fname = nb_dir / f"source_{i:03d}.md"
             fname.write_text("\n".join(chunk_lines), encoding="utf-8")
@@ -62,7 +71,6 @@ def _collect_chunks_for_output(
     split_settings: "SplitSettings | None",
 ) -> list[list[str]]:
     if split_settings is None or not split_settings.enabled:
-        # デフォルト動作: 後退互換の per-doc split_size ロジックを使う
         return _collect_chunks_per_doc(documents, default_split_size)
     return _collect_chunks_per_doc_with_metric(documents, split_settings)
 
@@ -165,3 +173,110 @@ def _split_large_section(sec: KnowledgeSection, split_size: int, metric: str = "
         parts.append(lines)
 
     return parts
+
+
+# ---------------------------------------------------------------------------
+# Overflow 戦略
+# ---------------------------------------------------------------------------
+
+def _apply_overflow_strategy(
+    chunks: list[list[str]],
+    documents: list[KnowledgeDocument],
+    split_settings: "SplitSettings",
+    context: "PipelineContext",
+) -> list[list[str]]:
+    """ファイル数・文字数の制約チェックと overflow 戦略の適用。"""
+    max_src = split_settings.max_sources
+    threshold = split_settings.threshold
+    metric = split_settings.metric
+    overflow = split_settings.overflow
+    original_count = len(chunks)
+    count_exceeded = original_count > max_src
+
+    if overflow == "warn":
+        if count_exceeded:
+            context.warn(
+                f"NotebookLM のソース数上限（{max_src}）を超えています: {original_count} ファイル。"
+                f" overflow='merge' / 'trim_tail' / 'trim_even' で自動調整できます。"
+            )
+        for i, c in enumerate(chunks):
+            size = _measure("\n".join(c), metric)
+            if size > threshold:
+                context.warn(
+                    f"source_{i+1:03d}: {size:,} {metric} > {threshold:,}（NotebookLM 上限超過）"
+                )
+        return chunks
+
+    # Phase 1: ファイル数を max_sources に収める
+    if count_exceeded:
+        chunks = _group_chunks(chunks, max_src)
+        context.warn(f"ソース数を {original_count} → {len(chunks)} に統合しました。")
+
+    if overflow == "merge":
+        # Phase 2なし: 文字数超過は警告のみ
+        for i, c in enumerate(chunks):
+            size = _measure("\n".join(c), metric)
+            if size > threshold:
+                context.warn(
+                    f"source_{i+1:03d}: {size:,} {metric} > {threshold:,}（統合により上限超過）"
+                )
+        return chunks
+
+    # "trim_tail" / "trim_even": Phase 2でコンテンツを間引き
+    result: list[list[str]] = []
+    for i, c in enumerate(chunks):
+        size = _measure("\n".join(c), metric)
+        if size > threshold:
+            before = size
+            if overflow == "trim_tail":
+                c = _trim_tail(c, threshold, metric)
+            else:  # "trim_even"
+                c = _trim_even(c, threshold, metric)
+            after = _measure("\n".join(c), metric)
+            context.warn(
+                f"source_{i+1:03d}: {before:,} → {after:,} {metric} に間引きました。"
+            )
+        result.append(c)
+    return result
+
+
+def _group_chunks(chunks: list[list[str]], max_sources: int) -> list[list[str]]:
+    """n チャンクを max_sources グループに均等振り分け（O(n)）。"""
+    n = len(chunks)
+    q, r = divmod(n, max_sources)
+    result: list[list[str]] = []
+    start = 0
+    for i in range(max_sources):
+        end = start + q + (1 if i < r else 0)
+        merged: list[str] = []
+        for c in chunks[start:end]:
+            merged.extend(c)
+        result.append(merged)
+        start = end
+    return result
+
+
+def _trim_tail(lines: list[str], threshold: int, metric: str) -> list[str]:
+    """threshold を超えた末尾行を切り捨てる（行単位）。"""
+    result: list[str] = []
+    size = 0
+    for line in lines:
+        line_size = _measure(line, metric) + 1  # +1 for newline
+        if size + line_size > threshold:
+            break
+        result.append(line)
+        size += line_size
+    return result
+
+
+def _trim_even(lines: list[str], threshold: int, metric: str) -> list[str]:
+    """threshold に収まるよう均等サンプリングで行を間引く。"""
+    total = _measure("\n".join(lines), metric)
+    if total <= threshold:
+        return lines
+    keep_ratio = threshold / total
+    keep_count = max(1, int(len(lines) * keep_ratio))
+    if keep_count >= len(lines):
+        return lines
+    step = len(lines) / keep_count
+    return [lines[int(i * step)] for i in range(keep_count)]

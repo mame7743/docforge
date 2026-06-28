@@ -107,5 +107,7 @@ def _parse_split_settings(data: dict) -> SplitSettings:
     return SplitSettings(
         enabled=bool(data.get("enabled", False)),
         metric=data.get("metric", "chars"),
-        threshold=data.get("threshold", 100_000),
+        threshold=data.get("threshold", 500_000),
+        max_sources=data.get("max_sources", 50),
+        overflow=data.get("overflow", "warn"),
     )

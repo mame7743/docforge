@@ -27,6 +27,14 @@ from core.models.split_settings import SplitSettings
 _METRIC_LABELS = ["文字数 (chars)", "トークン数 (tokens)", "ファイルサイズ (bytes)"]
 _METRIC_VALUES = ["chars", "tokens", "bytes"]
 
+_OVERFLOW_LABELS = [
+    "警告のみ (warn)",
+    "統合・文字数超過許容 (merge)",
+    "統合＋末尾切り捨て (trim_tail)",
+    "統合＋均等サンプリング (trim_even)",
+]
+_OVERFLOW_VALUES = ["warn", "merge", "trim_tail", "trim_even"]
+
 
 class MainView(QWidget):
     def __init__(self, parent=None):
@@ -81,7 +89,14 @@ class MainView(QWidget):
                 label("  単位:"),
                 combo_box(*_METRIC_LABELS, id="split_metric"),
                 label("  しきい値:"),
-                spin_box(id="split_threshold", value=100_000, minimum=1_000, maximum=10_000_000, step=10_000),
+                spin_box(id="split_threshold", value=500_000, minimum=1_000, maximum=10_000_000, step=10_000),
+                label("  最大ファイル数:"),
+                spin_box(id="max_sources", value=50, minimum=1, maximum=500, step=1),
+                spacer(),
+            ),
+            hbox(
+                label("制限超過時:"),
+                combo_box(*_OVERFLOW_LABELS, id="split_overflow"),
                 spacer(),
             ),
             hbox(
@@ -94,9 +109,9 @@ class MainView(QWidget):
 
         root = build(self.ctx, layout_node)
 
-        # split_threshold はデフォルト無効（split_enable が OFF のとき）
-        self.ctx["split_threshold"].setEnabled(False)
-        self.ctx["split_metric"].setEnabled(False)
+        # 分割設定コントロールはデフォルト無効（split_enable が OFF のとき）
+        for widget_id in ("split_threshold", "split_metric", "max_sources", "split_overflow"):
+            self.ctx[widget_id].setEnabled(False)
         self.ctx["split_enable"].toggled.connect(self._on_split_enable_toggled)
 
         outer = QVBoxLayout(self)
@@ -104,8 +119,8 @@ class MainView(QWidget):
         outer.setContentsMargins(8, 8, 8, 8)
 
     def _on_split_enable_toggled(self, checked: bool) -> None:
-        self.ctx["split_threshold"].setEnabled(checked)
-        self.ctx["split_metric"].setEnabled(checked)
+        for widget_id in ("split_threshold", "split_metric", "max_sources", "split_overflow"):
+            self.ctx[widget_id].setEnabled(checked)
 
     # ------------------------------------------------------------------
     # ドキュメント入力アクセサ
@@ -215,11 +230,21 @@ class MainView(QWidget):
     def set_split_size(self, value: int) -> None:
         self.ctx["split_threshold"].setValue(value)
 
+    def max_sources(self) -> int:
+        return self.ctx["max_sources"].value()
+
+    def split_overflow(self) -> str:
+        idx = self.ctx["split_overflow"].currentIndex()
+        return _OVERFLOW_VALUES[idx] if 0 <= idx < len(_OVERFLOW_VALUES) else "warn"
+
     def set_split_settings(self, ss: SplitSettings) -> None:
         self.ctx["split_enable"].setChecked(ss.enabled)
         idx = _METRIC_VALUES.index(ss.metric) if ss.metric in _METRIC_VALUES else 0
         self.ctx["split_metric"].setCurrentIndex(idx)
         self.ctx["split_threshold"].setValue(ss.threshold)
+        self.ctx["max_sources"].setValue(ss.max_sources)
+        oidx = _OVERFLOW_VALUES.index(ss.overflow) if ss.overflow in _OVERFLOW_VALUES else 0
+        self.ctx["split_overflow"].setCurrentIndex(oidx)
 
     # ------------------------------------------------------------------
     # ログ / 進捗

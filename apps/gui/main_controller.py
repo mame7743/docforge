@@ -221,6 +221,8 @@ class MainController(QObject):
             enabled=self.view.split_enabled(),
             metric=self.view.split_metric(),
             threshold=self.view.split_threshold(),
+            max_sources=self.view.max_sources(),
+            overflow=self.view.split_overflow(),
         )
 
         settings = ConvertSettings(
