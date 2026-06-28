@@ -19,7 +19,13 @@ from .qdom import (
     progress_bar,
     spin_box,
     file_list,
+    combo_box,
 )
+
+from core.models.split_settings import SplitSettings
+
+_METRIC_LABELS = ["文字数 (chars)", "トークン数 (tokens)", "ファイルサイズ (bytes)"]
+_METRIC_VALUES = ["chars", "tokens", "bytes"]
 
 
 class MainView(QWidget):
@@ -33,14 +39,26 @@ class MainView(QWidget):
 
         layout_node = vbox(
             group(
-                "入力ファイル",
+                "ドキュメント入力（ファイル単位）",
                 file_list(id="input_files", stretch=1),
                 hbox(
-                    button("ファイル追加", id="add_files"),
-                    button("フォルダ追加", id="add_folder"),
+                    button("ファイルを追加...", id="add_files"),
+                    button("フォルダから追加（展開）...", id="add_folder"),
                     button("削除", id="remove_file"),
-                    button("バッチ設定読み込み...", id="load_config"),
                     spacer(),
+                    button("バッチ設定読み込み...", id="load_config"),
+                    button("フォーマット別設定...", id="format_settings_btn"),
+                ),
+                stretch=1,
+            ),
+            group(
+                "フォルダ / リポジトリ入力（一括単位）",
+                file_list(id="repo_list", stretch=1),
+                hbox(
+                    button("追加...", id="add_repo"),
+                    button("削除", id="remove_repo"),
+                    spacer(),
+                    button("取り込み設定...", id="repo_settings_btn"),
                 ),
                 stretch=1,
             ),
@@ -59,11 +77,12 @@ class MainView(QWidget):
                 checkbox("変換レポート", id="export_report", checked=True),
             ),
             hbox(
-                label("分割サイズ:"),
-                spin_box(id="split_size", value=100_000, minimum=10_000, maximum=1_000_000, step=10_000),
-                label("chars"),
+                checkbox("分割する", id="split_enable"),
+                label("  単位:"),
+                combo_box(*_METRIC_LABELS, id="split_metric"),
+                label("  しきい値:"),
+                spin_box(id="split_threshold", value=100_000, minimum=1_000, maximum=10_000_000, step=10_000),
                 spacer(),
-                button("フォーマット別設定...", id="format_settings_btn"),
             ),
             hbox(
                 spacer(),
@@ -75,12 +94,21 @@ class MainView(QWidget):
 
         root = build(self.ctx, layout_node)
 
+        # split_threshold はデフォルト無効（split_enable が OFF のとき）
+        self.ctx["split_threshold"].setEnabled(False)
+        self.ctx["split_metric"].setEnabled(False)
+        self.ctx["split_enable"].toggled.connect(self._on_split_enable_toggled)
+
         outer = QVBoxLayout(self)
         outer.addWidget(root, 1)
         outer.setContentsMargins(8, 8, 8, 8)
 
+    def _on_split_enable_toggled(self, checked: bool) -> None:
+        self.ctx["split_threshold"].setEnabled(checked)
+        self.ctx["split_metric"].setEnabled(checked)
+
     # ------------------------------------------------------------------
-    # Accessors used by MainController
+    # ドキュメント入力アクセサ
     # ------------------------------------------------------------------
 
     def input_paths(self) -> list[Path]:
@@ -99,12 +127,52 @@ class MainView(QWidget):
         for item in lw.selectedItems():
             lw.takeItem(lw.row(item))
 
+    def set_input_paths(self, paths: list[Path]) -> None:
+        lw = self.ctx["input_files"]
+        lw.clear()
+        for p in paths:
+            lw.addItem(str(p))
+
+    # ------------------------------------------------------------------
+    # リポジトリ入力アクセサ
+    # ------------------------------------------------------------------
+
+    def repo_paths(self) -> list[Path]:
+        lw = self.ctx["repo_list"]
+        return [Path(lw.item(i).text()) for i in range(lw.count())]
+
+    def add_repo_paths(self, paths: list[Path]) -> None:
+        lw = self.ctx["repo_list"]
+        existing = {lw.item(i).text() for i in range(lw.count())}
+        for p in paths:
+            if str(p) not in existing:
+                lw.addItem(str(p))
+
+    def remove_selected_repo(self) -> None:
+        lw = self.ctx["repo_list"]
+        for item in lw.selectedItems():
+            lw.takeItem(lw.row(item))
+
+    def set_repo_paths(self, paths: list[Path]) -> None:
+        lw = self.ctx["repo_list"]
+        lw.clear()
+        for p in paths:
+            lw.addItem(str(p))
+
+    # ------------------------------------------------------------------
+    # 出力先アクセサ
+    # ------------------------------------------------------------------
+
     def out_dir(self) -> Path | None:
         text = self.ctx["out_dir"].text().strip()
         return Path(text) if text else None
 
     def set_out_dir(self, path: Path) -> None:
         self.ctx["out_dir"].setText(str(path))
+
+    # ------------------------------------------------------------------
+    # 出力形式アクセサ
+    # ------------------------------------------------------------------
 
     def export_markdown(self) -> bool:
         return self.ctx["export_markdown"].isChecked()
@@ -118,21 +186,6 @@ class MainView(QWidget):
     def export_report(self) -> bool:
         return self.ctx["export_report"].isChecked()
 
-    def split_size(self) -> int:
-        return self.ctx["split_size"].value()
-
-    def set_progress(self, value: int) -> None:
-        self.ctx["progress"].setValue(value)
-
-    def append_log(self, text: str) -> None:
-        self.ctx["log"].append(text)
-
-    def set_input_paths(self, paths: list[Path]) -> None:
-        lw = self.ctx["input_files"]
-        lw.clear()
-        for p in paths:
-            lw.addItem(str(p))
-
     def set_export_flags(
         self, *, markdown: bool, notebooklm: bool, jsonl: bool, report: bool
     ) -> None:
@@ -141,11 +194,51 @@ class MainView(QWidget):
         self.ctx["export_jsonl"].setChecked(jsonl)
         self.ctx["export_report"].setChecked(report)
 
+    # ------------------------------------------------------------------
+    # 分割設定アクセサ
+    # ------------------------------------------------------------------
+
+    def split_enabled(self) -> bool:
+        return self.ctx["split_enable"].isChecked()
+
+    def split_metric(self) -> str:
+        idx = self.ctx["split_metric"].currentIndex()
+        return _METRIC_VALUES[idx] if 0 <= idx < len(_METRIC_VALUES) else "chars"
+
+    def split_threshold(self) -> int:
+        return self.ctx["split_threshold"].value()
+
+    def split_size(self) -> int:
+        """後退互換: split_enable=False のとき threshold をそのまま返す。"""
+        return self.ctx["split_threshold"].value()
+
     def set_split_size(self, value: int) -> None:
-        self.ctx["split_size"].setValue(value)
+        self.ctx["split_threshold"].setValue(value)
+
+    def set_split_settings(self, ss: SplitSettings) -> None:
+        self.ctx["split_enable"].setChecked(ss.enabled)
+        idx = _METRIC_VALUES.index(ss.metric) if ss.metric in _METRIC_VALUES else 0
+        self.ctx["split_metric"].setCurrentIndex(idx)
+        self.ctx["split_threshold"].setValue(ss.threshold)
+
+    # ------------------------------------------------------------------
+    # ログ / 進捗
+    # ------------------------------------------------------------------
+
+    def set_progress(self, value: int) -> None:
+        self.ctx["progress"].setValue(value)
+
+    def append_log(self, text: str) -> None:
+        self.ctx["log"].append(text)
+
+    # ------------------------------------------------------------------
+    # 実行中状態
+    # ------------------------------------------------------------------
 
     def set_running(self, running: bool) -> None:  # noqa: FBT001
         self.ctx["start"].setEnabled(not running)
         self.ctx["add_files"].setEnabled(not running)
         self.ctx["add_folder"].setEnabled(not running)
         self.ctx["load_config"].setEnabled(not running)
+        self.ctx["add_repo"].setEnabled(not running)
+        self.ctx["remove_repo"].setEnabled(not running)

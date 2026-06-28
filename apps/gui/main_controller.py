@@ -22,13 +22,17 @@ _DIALOG_OPTIONS = QFileDialog.Option.DontUseNativeDialog
 
 from .main_view import MainView
 from .format_settings_dialog import FormatSettingsDialog
+from .repo_settings_dialog import RepoSettingsDialog
 from core.models.format_settings import FormatSettings
+from core.models.repo_settings import RepoSettings
+from core.models.split_settings import SplitSettings
 from core.importers import (
     ImporterRegistry,
     TextImporter,
     MarkdownImporter,
     HtmlImporter,
     ChmImporter,
+    GitRepoImporter,
 )
 from core.transformers import (
     CleanNoiseTransformer,
@@ -58,8 +62,6 @@ class ConvertWorker(QObject):
     def __init__(self, pipeline: KnowledgePipeline, settings: ConvertSettings):
         super().__init__()
         self.settings = settings
-        # pipeline の log / progress を Signal.emit にワイヤリングする。
-        # emit はスレッドセーフで、Qt がキュー接続経由でメインスレッドへ届ける。
         pipeline.log = lambda msg: self.log_message.emit(msg)
         pipeline.progress = lambda v: self.progress_changed.emit(v)
         self.pipeline = pipeline
@@ -81,6 +83,7 @@ class MainController(QObject):
         self._worker: ConvertWorker | None = None
         self._format_settings: dict[str, FormatSettings] = {}
         self._file_encodings: dict[Path, str] = {}
+        self._repo_settings: RepoSettings = RepoSettings()
         self._connect_signals()
 
     def _connect_signals(self) -> None:
@@ -92,6 +95,9 @@ class MainController(QObject):
         ctx["start"].clicked.connect(self._on_start)
         ctx["format_settings_btn"].clicked.connect(self._on_format_settings)
         ctx["load_config"].clicked.connect(self._on_load_config)
+        ctx["add_repo"].clicked.connect(self._on_add_repo)
+        ctx["remove_repo"].clicked.connect(self._on_remove_repo)
+        ctx["repo_settings_btn"].clicked.connect(self._on_repo_settings)
 
     def _on_add_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
@@ -105,7 +111,7 @@ class MainController(QObject):
 
     def _on_add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(
-            self.view, "フォルダを追加", options=_DIALOG_OPTIONS
+            self.view, "フォルダを追加（ファイルを展開）", options=_DIALOG_OPTIONS
         )
         if folder:
             folder_path = Path(folder)
@@ -128,6 +134,22 @@ class MainController(QObject):
         from PySide6.QtWidgets import QDialog
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._format_settings = dlg.get_settings()
+
+    def _on_add_repo(self) -> None:
+        folder = QFileDialog.getExistingDirectory(
+            self.view, "フォルダ / リポジトリを追加", options=_DIALOG_OPTIONS
+        )
+        if folder:
+            self.view.add_repo_paths([Path(folder)])
+
+    def _on_remove_repo(self) -> None:
+        self.view.remove_selected_repo()
+
+    def _on_repo_settings(self) -> None:
+        dlg = RepoSettingsDialog(self._repo_settings, parent=self.view)
+        from PySide6.QtWidgets import QDialog
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._repo_settings = dlg.get_settings()
 
     def _on_load_config(self) -> None:
         try:
@@ -158,7 +180,10 @@ class MainController(QObject):
             QMessageBox.critical(self.view, "読み込みエラー", str(e))
             return
 
-        self.view.set_input_paths(settings.input_paths)
+        # is_dir() でドキュメントとリポジトリに振り分け
+        self.view.set_input_paths([p for p in settings.input_paths if not p.is_dir()])
+        self.view.set_repo_paths([p for p in settings.input_paths if p.is_dir()])
+
         if settings.out_dir:
             self.view.set_out_dir(settings.out_dir)
         self.view.set_export_flags(
@@ -167,24 +192,36 @@ class MainController(QObject):
             jsonl=settings.export_jsonl,
             report=settings.export_report,
         )
-        self.view.set_split_size(settings.split_size_chars)
+        self.view.set_split_settings(settings.split_settings)
         self._format_settings = settings.format_settings
         self._file_encodings = settings.input_encodings
+        self._repo_settings = settings.repo_settings
 
-        n = len(settings.input_paths)
+        n_files = len([p for p in settings.input_paths if not p.is_dir()])
+        n_repos = len([p for p in settings.input_paths if p.is_dir()])
         nf = len(settings.format_settings)
-        self.view.append_log(f"設定読み込み完了: {n} ファイル, {nf} フォーマット設定")
+        self.view.append_log(
+            f"設定読み込み完了: ファイル {n_files} 件, リポジトリ {n_repos} 件, フォーマット設定 {nf} 件"
+        )
 
     def _on_start(self) -> None:
-        input_paths = self.view.input_paths()
+        doc_paths = self.view.input_paths()
+        repo_paths = self.view.repo_paths()
+        input_paths = doc_paths + repo_paths
         out_dir = self.view.out_dir()
 
         if not input_paths:
-            QMessageBox.warning(self.view, "エラー", "入力ファイルを追加してください。")
+            QMessageBox.warning(self.view, "エラー", "入力ファイルまたはリポジトリを追加してください。")
             return
         if not out_dir:
             QMessageBox.warning(self.view, "エラー", "出力先を指定してください。")
             return
+
+        split_settings = SplitSettings(
+            enabled=self.view.split_enabled(),
+            metric=self.view.split_metric(),
+            threshold=self.view.split_threshold(),
+        )
 
         settings = ConvertSettings(
             input_paths=input_paths,
@@ -193,15 +230,23 @@ class MainController(QObject):
             export_notebooklm=self.view.export_notebooklm(),
             export_jsonl=self.view.export_jsonl(),
             export_report=self.view.export_report(),
-            split_size_chars=self.view.split_size(),
+            split_size_chars=self.view.split_threshold(),
             format_settings=self._format_settings,
             input_encodings=self._file_encodings,
+            repo_settings=self._repo_settings,
+            split_settings=split_settings,
         )
 
-        pipeline = self._build_pipeline(settings.split_size_chars)
+        pipeline = self._build_pipeline(settings.split_size_chars, split_settings=split_settings)
         self._start_worker(pipeline, settings)
 
-    def _build_pipeline(self, split_size: int) -> KnowledgePipeline:
+    def _build_pipeline(
+        self,
+        split_size: int,
+        split_settings: SplitSettings | None = None,
+    ) -> KnowledgePipeline:
+        rs = self._repo_settings
+
         registry = ImporterRegistry()
         registry.register(TextImporter())
         registry.register(MarkdownImporter())
@@ -213,6 +258,16 @@ class MainController(QObject):
         except Exception:
             pass
 
+        registry.register(GitRepoImporter(
+            max_file_size=rs.max_file_size,
+            include_patterns=set(rs.include_patterns) or None,
+            exclude_patterns=set(rs.exclude_patterns) or None,
+            branch=rs.branch,
+            tag=rs.tag,
+            include_gitignored=rs.include_gitignored,
+            include_submodules=rs.include_submodules,
+        ))
+
         transformers = [
             CleanNoiseTransformer(),
             NormalizeHeadingTransformer(),
@@ -221,7 +276,7 @@ class MainController(QObject):
         ]
         writers = [
             MarkdownWriter(),
-            NotebookLMWriter(split_size_chars=split_size),
+            NotebookLMWriter(split_size_chars=split_size, split_settings=split_settings),
             JsonlWriter(),
             ReportWriter(),
         ]

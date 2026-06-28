@@ -32,10 +32,18 @@ class GitRepoImporter(Importer):
         max_file_size: int = 500_000,
         include_patterns: str | set[str] | None = None,
         exclude_patterns: str | set[str] | None = None,
+        branch: str | None = None,
+        tag: str | None = None,
+        include_gitignored: bool = False,
+        include_submodules: bool = False,
     ) -> None:
         self.max_file_size = max_file_size
         self.include_patterns = include_patterns
         self.exclude_patterns = exclude_patterns
+        self.branch = branch
+        self.tag = tag
+        self.include_gitignored = include_gitignored
+        self.include_submodules = include_submodules
 
     def can_import(self, path: Path) -> bool:
         return path.is_dir()
@@ -56,6 +64,10 @@ class GitRepoImporter(Importer):
                 max_file_size=self.max_file_size,
                 include_patterns=self.include_patterns,
                 exclude_patterns=self.exclude_patterns,
+                branch=self.branch,
+                tag=self.tag,
+                include_gitignored=self.include_gitignored,
+                include_submodules=self.include_submodules,
             )
         except Exception as e:
             context.warn(f"gitingest 失敗 ({repo_name}): {e}")
