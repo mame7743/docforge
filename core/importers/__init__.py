@@ -4,6 +4,7 @@ from .text_importer import TextImporter
 from .markdown_importer import MarkdownImporter
 from .html_importer import HtmlImporter
 from .chm_importer import ChmImporter
+from .gitrepo_importer import GitRepoImporter
 
 __all__ = [
     "Importer",
@@ -12,4 +13,5 @@ __all__ = [
     "MarkdownImporter",
     "HtmlImporter",
     "ChmImporter",
+    "GitRepoImporter",
 ]

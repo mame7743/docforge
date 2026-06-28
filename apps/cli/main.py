@@ -10,6 +10,7 @@ from core.importers import (
     MarkdownImporter,
     HtmlImporter,
     ChmImporter,
+    GitRepoImporter,
 )
 from core.transformers import (
     CleanNoiseTransformer,
@@ -44,6 +45,9 @@ def _build_pipeline(
         registry.register(MarkItDownImporter())
     except Exception:
         pass
+
+    # GitRepoImporter: ディレクトリを最後に登録（他の Importer が処理しないパスをキャッチ）
+    registry.register(GitRepoImporter())
 
     transformers = [
         CleanNoiseTransformer(),
