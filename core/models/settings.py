@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .format_settings import FormatSettings
+from .repo_settings import RepoSettings
+from .split_settings import SplitSettings
 
 
 @dataclass
@@ -18,7 +20,7 @@ class ConvertSettings:
     export_report: bool = True         # docforge_report.md
 
     copy_assets: bool = True           # 画像などをアセットとして出力先へコピーする
-    split_size_chars: int = 100_000    # NotebookLM 分割の目安文字数（デフォルト10万字）
+    split_size_chars: int = 100_000    # 後退互換: split_settings.enabled=False のときに使用
 
     encoding_hint: str | None = None   # 入力ファイルのエンコーディング強制指定（例: "cp932"）
 
@@ -31,3 +33,9 @@ class ConvertSettings:
     format_settings: dict[str, FormatSettings] = field(default_factory=dict)
     # パス別エンコーディング上書き（format_settings.encoding より優先）
     input_encodings: dict[Path, str] = field(default_factory=dict)
+
+    # --- リポジトリ取り込み設定 ---
+    repo_settings: RepoSettings = field(default_factory=RepoSettings)
+
+    # --- 出力分割設定 ---
+    split_settings: SplitSettings = field(default_factory=SplitSettings)

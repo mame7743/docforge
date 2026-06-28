@@ -26,28 +26,40 @@ from core.writers import (
 )
 from core.pipeline import KnowledgePipeline
 from core.models.settings import ConvertSettings
+from core.models.repo_settings import RepoSettings
+from core.models.split_settings import SplitSettings
 
 
 def _build_pipeline(
     split_size: int,
+    repo_settings: RepoSettings | None = None,
+    split_settings: SplitSettings | None = None,
     log: Callable[[str], None] | None = None,
     progress: Callable[[int], None] | None = None,
 ) -> KnowledgePipeline:
+    rs = repo_settings or RepoSettings()
+
     registry = ImporterRegistry()
     registry.register(TextImporter())
     registry.register(MarkdownImporter())
     registry.register(HtmlImporter())
     registry.register(ChmImporter())
 
-    # MarkItDownImporter registered if available
     try:
         from core.importers.markitdown_importer import MarkItDownImporter
         registry.register(MarkItDownImporter())
     except Exception:
         pass
 
-    # GitRepoImporter: ディレクトリを最後に登録（他の Importer が処理しないパスをキャッチ）
-    registry.register(GitRepoImporter())
+    registry.register(GitRepoImporter(
+        max_file_size=rs.max_file_size,
+        include_patterns=set(rs.include_patterns) or None,
+        exclude_patterns=set(rs.exclude_patterns) or None,
+        branch=rs.branch,
+        tag=rs.tag,
+        include_gitignored=rs.include_gitignored,
+        include_submodules=rs.include_submodules,
+    ))
 
     transformers = [
         CleanNoiseTransformer(),
@@ -58,7 +70,7 @@ def _build_pipeline(
 
     writers = [
         MarkdownWriter(),
-        NotebookLMWriter(split_size_chars=split_size),
+        NotebookLMWriter(split_size_chars=split_size, split_settings=split_settings),
         JsonlWriter(),
         ReportWriter(),
     ]
@@ -186,7 +198,12 @@ def batch(config_path):
     def log(msg: str) -> None:
         click.echo(msg)
 
-    pipeline = _build_pipeline(split_size=settings.split_size_chars, log=log)
+    pipeline = _build_pipeline(
+        split_size=settings.split_size_chars,
+        repo_settings=settings.repo_settings,
+        split_settings=settings.split_settings,
+        log=log,
+    )
     result = pipeline.run(settings)
 
     click.echo("")

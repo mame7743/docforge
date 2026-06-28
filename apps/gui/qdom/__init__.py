@@ -13,6 +13,7 @@ from .factory import (
     progress_bar,
     spin_box,
     file_list,
+    combo_box,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "progress_bar",
     "spin_box",
     "file_list",
+    "combo_box",
 ]

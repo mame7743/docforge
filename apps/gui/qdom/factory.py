@@ -19,6 +19,7 @@ from typing import Any
 
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -96,6 +97,11 @@ def file_list(**props: Any) -> Node:
     return Node("file_list", props)
 
 
+def combo_box(*items: str, **props: Any) -> Node:
+    """選択肢を持つドロップダウン。items で選択肢を指定し current で初期選択インデックスを指定する。"""
+    return Node("combo_box", {"items": list(items), **props})
+
+
 # ---------------------------------------------------------------------------
 # Realizer — Node ツリーを実際の PySide6 ウィジェットに変換する
 # ---------------------------------------------------------------------------
@@ -155,6 +161,13 @@ def _realize(ctx: UIContext, node: Node) -> QWidget:
         widget = w
     elif kind == "file_list":
         widget = QListWidget()
+    elif kind == "combo_box":
+        w = QComboBox()
+        for item in props.get("items", []):
+            w.addItem(item)
+        if "current" in props:
+            w.setCurrentIndex(props["current"])
+        widget = w
     else:
         widget = QWidget()
 

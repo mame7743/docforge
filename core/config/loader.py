@@ -9,6 +9,8 @@ import yaml
 
 from core.models.settings import ConvertSettings
 from core.models.format_settings import FormatSettings
+from core.models.repo_settings import RepoSettings
+from core.models.split_settings import SplitSettings
 
 
 def load_config(config_path: Path) -> ConvertSettings:
@@ -30,6 +32,9 @@ def load_config(config_path: Path) -> ConvertSettings:
         ext = ext if ext.startswith(".") else f".{ext}"
         format_settings[ext.lower()] = _parse_format_settings(fdata or {})
 
+    repo_settings = _parse_repo_settings(data.get("repository") or {})
+    split_settings = _parse_split_settings(data.get("split") or {})
+
     return ConvertSettings(
         input_paths=input_paths,
         input_encodings=input_encodings,
@@ -40,6 +45,8 @@ def load_config(config_path: Path) -> ConvertSettings:
         export_report=output.get("report", True),
         split_size_chars=output.get("split_size", 100_000),
         format_settings=format_settings,
+        repo_settings=repo_settings,
+        split_settings=split_settings,
     )
 
 
@@ -81,4 +88,26 @@ def _parse_format_settings(data: dict) -> FormatSettings:
         extra_noise_patterns=data.get("extra_noise_patterns") or [],
         enabled_transformers=data.get("enabled_transformers"),
         split_size_chars=data.get("split_size"),
+    )
+
+
+def _parse_repo_settings(data: dict) -> RepoSettings:
+    return RepoSettings(
+        max_file_size=data.get("max_file_size", 500_000),
+        include_patterns=data.get("include_patterns") or [],
+        exclude_patterns=data.get("exclude_patterns") or [],
+        branch=data.get("branch"),
+        tag=data.get("tag"),
+        include_gitignored=bool(data.get("include_gitignored", False)),
+        include_submodules=bool(data.get("include_submodules", False)),
+    )
+
+
+def _parse_split_settings(data: dict) -> SplitSettings:
+    return SplitSettings(
+        enabled=bool(data.get("enabled", False)),
+        metric=data.get("metric", "chars"),
+        threshold=data.get("threshold", 500_000),
+        max_sources=data.get("max_sources", 50),
+        overflow=data.get("overflow", "warn"),
     )
