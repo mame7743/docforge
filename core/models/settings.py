@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .format_settings import FormatSettings
+
 
 @dataclass
 class ConvertSettings:
@@ -23,3 +25,9 @@ class ConvertSettings:
     # 空リストのときはすべての登録済み Importer / Transformer を使用する
     enabled_importers: list[str] = field(default_factory=list)
     enabled_transformers: list[str] = field(default_factory=list)
+
+    # --- フォーマット別設定 ---
+    # キーは小文字の拡張子（例: ".pdf", ".txt"）
+    format_settings: dict[str, FormatSettings] = field(default_factory=dict)
+    # パス別エンコーディング上書き（format_settings.encoding より優先）
+    input_encodings: dict[Path, str] = field(default_factory=dict)

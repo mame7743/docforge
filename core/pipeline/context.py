@@ -5,8 +5,14 @@ Importer・Transformer・Writer はすべてこの context を受け取り、
 PySide6 に依存しないため、CLI・テスト・GUI すべてで共通利用できる。
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.models.format_settings import FormatSettings
 
 
 @dataclass
@@ -15,6 +21,7 @@ class PipelineContext:
     warnings: list[str] = field(default_factory=list)
     metadata: dict[str, str] = field(default_factory=dict)
     encoding_hint: str | None = None       # ConvertSettings から引き継ぐ
+    format_settings: "FormatSettings | None" = None  # 現在処理中ファイルのフォーマット設定
 
     def warn(self, message: str) -> None:
         """警告を記録する。変換は中断せず続行する。"""

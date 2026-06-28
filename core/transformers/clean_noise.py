@@ -37,10 +37,19 @@ class CleanNoiseTransformer(Transformer):
     name = "clean_noise"
 
     def transform(self, document: KnowledgeDocument, context: PipelineContext) -> KnowledgeDocument:
+        patterns = list(_NOISE_PATTERNS)
+        fmt = context.format_settings
+        if fmt and fmt.extra_noise_patterns:
+            for raw in fmt.extra_noise_patterns:
+                try:
+                    patterns.append(re.compile(raw, re.IGNORECASE | re.MULTILINE))
+                except re.error as e:
+                    context.warn(f"Invalid noise pattern '{raw}': {e}")
+
         cleaned = []
         for sec in document.sections:
             text = sec.text
-            for pat in _NOISE_PATTERNS:
+            for pat in patterns:
                 text = pat.sub("", text)
             # 連続する空行を最大2行に圧縮する
             text = re.sub(r"\n{3,}", "\n\n", text).strip()

@@ -12,6 +12,7 @@ dependencies = [
     "html2text>=2024.2",
     "click>=8.1",
     "gitingest>=0.3.1",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]

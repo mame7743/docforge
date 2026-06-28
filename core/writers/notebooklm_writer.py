@@ -31,7 +31,7 @@ class NotebookLMWriter(Writer):
         nb_dir = out_dir / "notebooklm"
         nb_dir.mkdir(parents=True, exist_ok=True)
 
-        chunks = _collect_chunks(documents, self.split_size)
+        chunks = _collect_chunks_per_doc(documents, self.split_size)
         output_files: list[Path] = []
 
         for i, chunk_lines in enumerate(chunks, start=1):
@@ -40,6 +40,17 @@ class NotebookLMWriter(Writer):
             output_files.append(fname)
 
         return output_files
+
+
+def _collect_chunks_per_doc(
+    documents: list[KnowledgeDocument], default_split_size: int
+) -> list[list[str]]:
+    """ドキュメントごとに個別の split_size を適用してチャンクを収集する。"""
+    all_chunks: list[list[str]] = []
+    for doc in documents:
+        doc_split = int(doc.metadata.get("split_size_chars", default_split_size))
+        all_chunks.extend(_collect_chunks([doc], doc_split))
+    return all_chunks
 
 
 def _collect_chunks(

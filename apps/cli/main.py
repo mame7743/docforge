@@ -155,6 +155,59 @@ def inspect(input):
 
 
 @cli.command()
+@click.option("--config", "config_path", required=True, type=click.Path(exists=True), help="YAMLバッチコンフィグファイルのパス")
+def batch(config_path):
+    """YAMLコンフィグファイルを使って一括変換する。"""
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        click.echo("Error: PyYAML が必要です。`pip install PyYAML` を実行してください。", err=True)
+        sys.exit(1)
+
+    from core.config.loader import load_config
+
+    cfg_path = Path(config_path)
+    try:
+        settings = load_config(cfg_path)
+    except Exception as e:
+        click.echo(f"Error: コンフィグの読み込みに失敗しました: {e}", err=True)
+        sys.exit(1)
+
+    if not settings.input_paths:
+        click.echo("Warning: コンフィグに一致する入力ファイルが見つかりません。", err=True)
+        sys.exit(1)
+
+    click.echo(f"Config : {cfg_path}")
+    click.echo(f"Inputs : {len(settings.input_paths)} ファイル")
+    click.echo(f"Output : {settings.out_dir}")
+    if settings.format_settings:
+        click.echo(f"Formats: {', '.join(sorted(settings.format_settings))}")
+
+    def log(msg: str) -> None:
+        click.echo(msg)
+
+    pipeline = _build_pipeline(split_size=settings.split_size_chars, log=log)
+    result = pipeline.run(settings)
+
+    click.echo("")
+    click.echo("=== DocForge Batch Complete ===")
+    click.echo(f"Documents : {result.document_count}")
+    click.echo(f"Sections  : {result.section_count}")
+    click.echo(f"Assets    : {result.asset_count}")
+    click.echo(f"Warnings  : {len(result.warnings)}")
+    click.echo("")
+    click.echo("Output files:")
+    for f in result.output_files:
+        click.echo(f"  {f}")
+
+    if result.warnings:
+        click.echo("")
+        click.echo("Warnings:")
+        for w in result.warnings:
+            click.echo(f"  ! {w}")
+
+
+@cli.command()
 def plugins():
     """List registered importers."""
     pipeline = _build_pipeline(split_size=100_000)
