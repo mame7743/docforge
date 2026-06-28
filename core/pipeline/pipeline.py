@@ -56,12 +56,26 @@ class KnowledgePipeline:
 
         # --- Import フェーズ（進捗 0〜50%） ---
         for i, path in enumerate(settings.input_paths):
+            # フォーマット別設定を解決してコンテキストに注入する
+            fmt = settings.format_settings.get(path.suffix.lower())
+            context.format_settings = fmt
+
+            # エンコーディング優先順位: パス別 > フォーマット別 > グローバル
+            path_encoding = settings.input_encodings.get(path)
+            if path_encoding:
+                context.encoding_hint = path_encoding
+            elif fmt and fmt.encoding:
+                context.encoding_hint = fmt.encoding
+            else:
+                context.encoding_hint = settings.encoding_hint
+
             try:
                 importer = self.registry.find(path)
             except ValueError as e:
                 context.warn(str(e))
                 self.log(f"Skipped: {path.name} (unsupported)")
                 self.progress(int((i + 1) / total * 50))
+                context.format_settings = None
                 continue
 
             self.log(f"Import: {path.name} [{importer.name}]")
@@ -71,14 +85,25 @@ class KnowledgePipeline:
                 context.warn(f"Import failed for {path.name}: {e}")
                 self.log(f"Error: {path.name}: {e}")
                 self.progress(int((i + 1) / total * 50))
+                context.format_settings = None
                 continue
 
+            # per-doc split_size をメタデータに保存（NotebookLMWriter が参照する）
+            effective_split = (
+                fmt.split_size_chars
+                if fmt and fmt.split_size_chars is not None
+                else settings.split_size_chars
+            )
+            doc.metadata["split_size_chars"] = str(effective_split)
+
             # Transformer は直列に適用する（順序依存あり）
-            for transformer in self.transformers:
+            for transformer in self._select_transformers(fmt):
                 try:
                     doc = transformer.transform(doc, context)
                 except Exception as e:
                     context.warn(f"Transform error ({transformer.name}) on {path.name}: {e}")
+
+            context.format_settings = None
 
             if not doc.sections:
                 msg = f"No content extracted from {path.name} — skipped"
@@ -126,6 +151,13 @@ class KnowledgePipeline:
                 result.report_file = f
 
         return result
+
+    def _select_transformers(self, fmt) -> list[Transformer]:
+        """フォーマット設定に基づいて有効な Transformer だけを返す。"""
+        if fmt is None or fmt.enabled_transformers is None:
+            return self.transformers
+        names = set(fmt.enabled_transformers)
+        return [t for t in self.transformers if t.name in names]
 
     def _select_writers(self, settings: ConvertSettings) -> list[Writer]:
         """settings のフラグに基づいて有効な Writer だけを返す。"""

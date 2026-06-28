@@ -21,6 +21,8 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 _DIALOG_OPTIONS = QFileDialog.Option.DontUseNativeDialog
 
 from .main_view import MainView
+from .format_settings_dialog import FormatSettingsDialog
+from core.models.format_settings import FormatSettings
 from core.importers import (
     ImporterRegistry,
     TextImporter,
@@ -77,6 +79,8 @@ class MainController(QObject):
         self.view = view
         self._thread: QThread | None = None
         self._worker: ConvertWorker | None = None
+        self._format_settings: dict[str, FormatSettings] = {}
+        self._file_encodings: dict[Path, str] = {}
         self._connect_signals()
 
     def _connect_signals(self) -> None:
@@ -86,6 +90,8 @@ class MainController(QObject):
         ctx["remove_file"].clicked.connect(self._on_remove_file)
         ctx["browse_out"].clicked.connect(self._on_browse_out)
         ctx["start"].clicked.connect(self._on_start)
+        ctx["format_settings_btn"].clicked.connect(self._on_format_settings)
+        ctx["load_config"].clicked.connect(self._on_load_config)
 
     def _on_add_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
@@ -117,6 +123,58 @@ class MainController(QObject):
         if folder:
             self.view.set_out_dir(Path(folder))
 
+    def _on_format_settings(self) -> None:
+        dlg = FormatSettingsDialog(self._format_settings, parent=self.view)
+        from PySide6.QtWidgets import QDialog
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._format_settings = dlg.get_settings()
+
+    def _on_load_config(self) -> None:
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            QMessageBox.critical(
+                self.view,
+                "エラー",
+                "PyYAML が必要です。`pip install PyYAML` を実行してください。",
+            )
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self.view,
+            "バッチコンフィグを開く",
+            "",
+            "YAML Files (*.yaml *.yml);;All Files (*)",
+            options=_DIALOG_OPTIONS,
+        )
+        if not path:
+            return
+
+        from core.config.loader import load_config
+
+        try:
+            settings = load_config(Path(path))
+        except Exception as e:
+            QMessageBox.critical(self.view, "読み込みエラー", str(e))
+            return
+
+        self.view.set_input_paths(settings.input_paths)
+        if settings.out_dir:
+            self.view.set_out_dir(settings.out_dir)
+        self.view.set_export_flags(
+            markdown=settings.export_markdown,
+            notebooklm=settings.export_notebooklm,
+            jsonl=settings.export_jsonl,
+            report=settings.export_report,
+        )
+        self.view.set_split_size(settings.split_size_chars)
+        self._format_settings = settings.format_settings
+        self._file_encodings = settings.input_encodings
+
+        n = len(settings.input_paths)
+        nf = len(settings.format_settings)
+        self.view.append_log(f"設定読み込み完了: {n} ファイル, {nf} フォーマット設定")
+
     def _on_start(self) -> None:
         input_paths = self.view.input_paths()
         out_dir = self.view.out_dir()
@@ -136,6 +194,8 @@ class MainController(QObject):
             export_jsonl=self.view.export_jsonl(),
             export_report=self.view.export_report(),
             split_size_chars=self.view.split_size(),
+            format_settings=self._format_settings,
+            input_encodings=self._file_encodings,
         )
 
         pipeline = self._build_pipeline(settings.split_size_chars)

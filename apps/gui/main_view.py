@@ -39,6 +39,7 @@ class MainView(QWidget):
                     button("ファイル追加", id="add_files"),
                     button("フォルダ追加", id="add_folder"),
                     button("削除", id="remove_file"),
+                    button("バッチ設定読み込み...", id="load_config"),
                     spacer(),
                 ),
                 stretch=1,
@@ -62,6 +63,7 @@ class MainView(QWidget):
                 spin_box(id="split_size", value=100_000, minimum=10_000, maximum=1_000_000, step=10_000),
                 label("chars"),
                 spacer(),
+                button("フォーマット別設定...", id="format_settings_btn"),
             ),
             hbox(
                 spacer(),
@@ -125,7 +127,25 @@ class MainView(QWidget):
     def append_log(self, text: str) -> None:
         self.ctx["log"].append(text)
 
+    def set_input_paths(self, paths: list[Path]) -> None:
+        lw = self.ctx["input_files"]
+        lw.clear()
+        for p in paths:
+            lw.addItem(str(p))
+
+    def set_export_flags(
+        self, *, markdown: bool, notebooklm: bool, jsonl: bool, report: bool
+    ) -> None:
+        self.ctx["export_markdown"].setChecked(markdown)
+        self.ctx["export_notebooklm"].setChecked(notebooklm)
+        self.ctx["export_jsonl"].setChecked(jsonl)
+        self.ctx["export_report"].setChecked(report)
+
+    def set_split_size(self, value: int) -> None:
+        self.ctx["split_size"].setValue(value)
+
     def set_running(self, running: bool) -> None:  # noqa: FBT001
         self.ctx["start"].setEnabled(not running)
         self.ctx["add_files"].setEnabled(not running)
         self.ctx["add_folder"].setEnabled(not running)
+        self.ctx["load_config"].setEnabled(not running)
